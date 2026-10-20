@@ -525,11 +525,19 @@
       const c = this.settings.bindings[action];
       return c ? this.justPressed.has(c) : false;
     }
-    // Returns and resets the per-frame deltas + pressed set. Call once per frame AFTER systems read.
-    consumeFrame() {
+    // Returns and resets ONLY the mouse deltas. Safe to call mid-frame: the
+    // pressed set stays intact so every system in the frame can still read it.
+    consumeDeltas() {
       const d = { dx: this.mouseDX, dy: this.mouseDY };
       this.mouseDX = 0;
       this.mouseDY = 0;
+      return d;
+    }
+    // Clears the per-frame pressed set. Call exactly once, at the END of the
+    // frame, after all systems have read pressed() — clearing it earlier makes
+    // every pressed() check later in that frame silently fail.
+    consumeFrame() {
+      const d = this.consumeDeltas();
       this.justPressed.clear();
       return d;
     }
@@ -4374,6 +4382,7 @@
       let dt = Math.min(0.05, (now - this.lastTs) / 1e3);
       this.lastTs = now;
       if (this.paused) {
+        this.input.consumeFrame();
         this.renderer.render(this.scene, this.camera);
         return;
       }
@@ -4393,6 +4402,7 @@
           this.updateResults(dt);
           break;
       }
+      this.input.consumeFrame();
       this.fx.update(dt);
       this.ui.tick(dt);
       this.renderer.render(this.scene, this.camera);
@@ -4539,7 +4549,7 @@
       for (const c of this.characters) {
         if (!c.parachuting) continue;
         if (c.isPlayer) {
-          const d = this.input.consumeFrame();
+          const d = this.input.consumeDeltas();
           this.rig.applyLook(d.dx, d.dy, dt);
           c.yaw = this.rig.yaw;
           const steer = {
@@ -4632,7 +4642,7 @@
         input.consumeFrame();
         return;
       }
-      const d = input.consumeFrame();
+      const d = input.consumeDeltas();
       this.rig.applyLook(d.dx, d.dy, dt);
       p.yaw = this.rig.yaw;
       p.pitch = this.rig.pitch + this.rig.recoilP;
